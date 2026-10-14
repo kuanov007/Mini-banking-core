@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: mini-bank-core
+
+  # Local defaults: compose.yaml publishes PostgreSQL on localhost:5433.
+  # In Docker, CI and production they are overridden by SPRING_DATASOURCE_* environment variables.
+  datasource:
+    url: jdbc:postgresql://localhost:5433/app
+    username: app
+    password: app
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate # Flyway owns the schema, Hibernate only checks that entities match it
+
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  jwt:
+    # The HS256 signing key (at least 32 bytes) comes from APP_JWT_SECRET. No default on purpose:
+    # without it the app refuses to start. Demo values live only in compose.yaml and the test config.
+    ttl: 30m
+  # The admin is created at startup from APP_ADMIN_USERNAME / APP_ADMIN_PASSWORD if it doesn't exist yet;
+  # when they are unset, no admin is created.

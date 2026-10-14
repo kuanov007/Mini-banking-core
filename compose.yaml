@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    ports:
+      - "5433:5432" # 5433 on the host, so it never clashes with a locally installed PostgreSQL
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/app
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: app
+      # Demo values only: never reuse them outside local runs
+      APP_JWT_SECRET: demo-only-jwt-secret-change-me-0123456789
+      APP_ADMIN_USERNAME: admin
+      APP_ADMIN_PASSWORD: admin-demo-password
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
