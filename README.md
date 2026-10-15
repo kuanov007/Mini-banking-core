@@ -124,6 +124,4 @@ src/test/java/uz/kuanov/minibank      TestcontainersConfig, TestApplication, tes
 - **One error format for everything.** RFC 9457 Problem Details with field-level validation messages and stable `code` values for business errors, so clients branch on codes instead of parsing messages.
 - **Real PostgreSQL in integration tests, not H2.** Same SQL and the same migrations as production, while unit tests stay Docker-free and fast.
 - **Package by feature.** Controllers are package-private.
-- **Pessimistic row locks, always in ascending id order.** A money movement locks both accounts with `SELECT ... FOR UPDATE` before reading their balances, so concurrent transfers can't lose an update; the fixed order means two opposite transfers queue instead of deadlocking. `DeadlockIT` keeps the proof: the same locks taken in opposite order make PostgreSQL abort one transaction.
-- **Someone else's account looks exactly like a missing one.** A transfer from an account the caller doesn't own fails with the same `ACCOUNT_NOT_FOUND` as an unknown number, so account numbers can't be probed.
 - **`Instant` + `timestamptz`, truncated to microseconds** (PostgreSQL's precision), so a timestamp doesn't change after a round trip through the database.
