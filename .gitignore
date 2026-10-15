@@ -17,3 +17,5 @@ Thumbs.db
 # Local
 .env
 *.log
+# Personal interview prep, kept out of the repository
+INTERVIEW_QUESTIONS.md
