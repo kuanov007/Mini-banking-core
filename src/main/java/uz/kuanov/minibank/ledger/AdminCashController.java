@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,14 +28,18 @@ class AdminCashController {
     @PostMapping("/deposits")
     @Operation(summary = "Deposit cash to a customer account (ADMIN)")
     ResponseEntity<OperationResponse> deposit(@Valid @RequestBody CashOperationRequest request,
+                                              @RequestHeader(IdempotencyKey.HEADER) String idempotencyKey,
                                               Authentication authentication) {
-        return OperationController.created(ledgerService.deposit(request, CurrentUser.from(authentication).id()));
+        return OperationController.created(ledgerService.deposit(request, CurrentUser.from(authentication).id(),
+                IdempotencyKey.fromHeader(idempotencyKey)));
     }
 
     @PostMapping("/withdrawals")
     @Operation(summary = "Withdraw cash from a customer account (ADMIN)")
     ResponseEntity<OperationResponse> withdraw(@Valid @RequestBody CashOperationRequest request,
+                                               @RequestHeader(IdempotencyKey.HEADER) String idempotencyKey,
                                                Authentication authentication) {
-        return OperationController.created(ledgerService.withdraw(request, CurrentUser.from(authentication).id()));
+        return OperationController.created(ledgerService.withdraw(request, CurrentUser.from(authentication).id(),
+                IdempotencyKey.fromHeader(idempotencyKey)));
     }
 }

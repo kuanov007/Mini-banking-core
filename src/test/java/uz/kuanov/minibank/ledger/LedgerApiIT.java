@@ -221,6 +221,7 @@ class LedgerApiIT {
         String descriptionJson = description == null ? "null" : "\"" + description + "\"";
         return mockMvc.perform(post("/api/admin/" + kind)
                 .header(HttpHeaders.AUTHORIZATION, user.bearer())
+                .header(TestBank.IDEMPOTENCY_KEY, UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountNumber": "%s", "amount": %s, "description": %s}

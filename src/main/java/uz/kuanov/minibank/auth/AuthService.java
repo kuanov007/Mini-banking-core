@@ -2,7 +2,6 @@ package uz.kuanov.minibank.auth;
 
 import java.util.UUID;
 
-import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -11,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import uz.kuanov.minibank.common.error.BusinessException;
+import uz.kuanov.minibank.common.error.ConstraintViolations;
 import uz.kuanov.minibank.user.User;
 import uz.kuanov.minibank.user.UserRepository;
 
@@ -50,7 +50,7 @@ public class AuthService {
             user = userRepository.save(user);
         } catch (DataIntegrityViolationException ex) {
             // Two concurrent registrations both passed the check above; the database let only one through
-            if (violates(ex, USERNAME_UNIQUE_CONSTRAINT)) {
+            if (ConstraintViolations.violates(ex, USERNAME_UNIQUE_CONSTRAINT)) {
                 throw usernameTaken();
             }
             throw ex;
@@ -71,14 +71,5 @@ public class AuthService {
 
     private static BusinessException usernameTaken() {
         return new BusinessException(USERNAME_TAKEN, "This username is already taken");
-    }
-
-    private static boolean violates(DataIntegrityViolationException ex, String constraintName) {
-        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConstraintViolationException violation) {
-                return constraintName.equalsIgnoreCase(violation.getConstraintName());
-            }
-        }
-        return false;
     }
 }

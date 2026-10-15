@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,7 +28,9 @@ class TransferController {
     @PostMapping
     @Operation(summary = "Transfer from one of your accounts to any customer account (CUSTOMER)")
     ResponseEntity<OperationResponse> transfer(@Valid @RequestBody TransferRequest request,
+                                               @RequestHeader(IdempotencyKey.HEADER) String idempotencyKey,
                                                Authentication authentication) {
-        return OperationController.created(ledgerService.transfer(request, CurrentUser.from(authentication).id()));
+        return OperationController.created(ledgerService.transfer(request, CurrentUser.from(authentication).id(),
+                IdempotencyKey.fromHeader(idempotencyKey)));
     }
 }

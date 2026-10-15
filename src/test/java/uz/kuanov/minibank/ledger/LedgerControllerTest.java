@@ -43,6 +43,7 @@ class LedgerControllerTest {
 
     private static final UUID OPERATION_ID = UUID.fromString("0b9e4bb6-6c3f-4f5e-9d2a-3f1c2e7a8b90");
     private static final String NUMBER = "00000000000000000005";
+    private static final String KEY = "3c9a1f4e-7b2d-4e8a-9f61-0d5c2b7e8a14";
     private static final OperationResponse DEPOSIT = new OperationResponse(OPERATION_ID, OperationType.DEPOSIT,
             new BigDecimal("1500.00"), Currency.UZS, null, NUMBER, "cash in", Instant.parse("2026-10-15T10:00:00Z"));
 
@@ -54,15 +55,17 @@ class LedgerControllerTest {
 
     @Test
     void depositReturns201WithLocationOfTheOperation() throws Exception {
-        when(ledgerService.deposit(any(), eq(1L))).thenReturn(DEPOSIT);
+        when(ledgerService.deposit(any(), eq(1L), eq(new IdempotencyKey(KEY))))
+                .thenReturn(new OperationResult(DEPOSIT, false));
 
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 1500.00, "description": "cash in"}
                                 """.formatted(NUMBER)))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "http://localhost/api/operations/" + OPERATION_ID))
+                .andExpect(header().doesNotExist("Idempotent-Replayed"))
                 .andExpect(jsonPath("$.type").value("DEPOSIT"))
                 .andExpect(jsonPath("$.fromAccount").isEmpty())
                 .andExpect(jsonPath("$.toAccount").value(NUMBER))
@@ -71,9 +74,9 @@ class LedgerControllerTest {
 
     @Test
     void withdrawalReturns201() throws Exception {
-        when(ledgerService.withdraw(any(), eq(1L))).thenReturn(DEPOSIT);
+        when(ledgerService.withdraw(any(), eq(1L), any())).thenReturn(new OperationResult(DEPOSIT, false));
 
-        mockMvc.perform(post("/api/admin/withdrawals").with(admin())
+        mockMvc.perform(post("/api/admin/withdrawals").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 10}
@@ -85,7 +88,7 @@ class LedgerControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"/api/admin/deposits", "/api/admin/withdrawals"})
     void customerGets403(String path) throws Exception {
-        mockMvc.perform(post(path).with(customer(7))
+        mockMvc.perform(post(path).with(customer(7)).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 10}
@@ -98,7 +101,7 @@ class LedgerControllerTest {
 
     @Test
     void depositWithoutTokenIs401() throws Exception {
-        mockMvc.perform(post("/api/admin/deposits")
+        mockMvc.perform(post("/api/admin/deposits").header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 10}
@@ -108,16 +111,16 @@ class LedgerControllerTest {
 
     @Test
     void acceptsTheMaximumAmountAndRejectsOneTiyinMore() throws Exception {
-        when(ledgerService.deposit(any(), anyLong())).thenReturn(DEPOSIT);
+        when(ledgerService.deposit(any(), anyLong(), any())).thenReturn(new OperationResult(DEPOSIT, false));
 
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 1000000000000.00}
                                 """.formatted(NUMBER)))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 1000000000000.01}
@@ -129,7 +132,7 @@ class LedgerControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"0", "-5.00", "10.001", "1000000000000.01", "100000000000000000.00"})
     void rejectsInvalidAmounts(String amount) throws Exception {
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": %s}
@@ -143,14 +146,14 @@ class LedgerControllerTest {
 
     @Test
     void rejectsMissingFieldsMalformedNumberAndLongDescription() throws Exception {
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.accountNumber").exists())
                 .andExpect(jsonPath("$.errors.amount").exists());
 
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "12345", "amount": 10, "description": "%s"}
@@ -164,9 +167,9 @@ class LedgerControllerTest {
 
     @Test
     void descriptionOf140CharactersIsAccepted() throws Exception {
-        when(ledgerService.deposit(any(), anyLong())).thenReturn(DEPOSIT);
+        when(ledgerService.deposit(any(), anyLong(), any())).thenReturn(new OperationResult(DEPOSIT, false));
 
-        mockMvc.perform(post("/api/admin/deposits").with(admin())
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 10, "description": "%s"}
@@ -176,16 +179,46 @@ class LedgerControllerTest {
 
     @Test
     void businessRuleViolationIs422WithCode() throws Exception {
-        when(ledgerService.withdraw(any(), anyLong()))
+        when(ledgerService.withdraw(any(), anyLong(), any()))
                 .thenThrow(new BusinessException("INSUFFICIENT_FUNDS", "Insufficient funds on account " + NUMBER));
 
-        mockMvc.perform(post("/api/admin/withdrawals").with(admin())
+        mockMvc.perform(post("/api/admin/withdrawals").with(admin()).header(IdempotencyKey.HEADER, KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": 10}
                                 """.formatted(NUMBER)))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("INSUFFICIENT_FUNDS"));
+    }
+
+    @Test
+    void replayCarriesTheIdempotentReplayedHeader() throws Exception {
+        when(ledgerService.deposit(any(), anyLong(), any())).thenReturn(new OperationResult(DEPOSIT, true));
+
+        mockMvc.perform(post("/api/admin/deposits").with(admin()).header(IdempotencyKey.HEADER, KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountNumber": "%s", "amount": 1500.00}
+                                """.formatted(NUMBER)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "http://localhost/api/operations/" + OPERATION_ID))
+                .andExpect(header().string("Idempotent-Replayed", "true"))
+                .andExpect(jsonPath("$.id").value(OPERATION_ID.toString()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/admin/deposits", "/api/admin/withdrawals"})
+    void missingIdempotencyKeyIs400(String path) throws Exception {
+        mockMvc.perform(post(path).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountNumber": "%s", "amount": 10}
+                                """.formatted(NUMBER)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value(containsString("Idempotency-Key")));
+
+        verifyNoInteractions(ledgerService);
     }
 
     @Test

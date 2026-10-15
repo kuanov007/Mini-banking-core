@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -107,7 +108,8 @@ class TransferConcurrencyIT {
                         PlannedTransfer transfer = plan.get(i);
                         try {
                             ledgerService.transfer(new TransferRequest(transfer.from().number(),
-                                    transfer.to().number(), transfer.amount(), null), transfer.from().ownerId());
+                                    transfer.to().number(), transfer.amount(), null), transfer.from().ownerId(),
+                                    newKey());
                             succeeded.incrementAndGet();
                         } catch (BusinessException ex) {
                             if (Account.INSUFFICIENT_FUNDS.equals(ex.getCode())) {
@@ -161,10 +163,16 @@ class TransferConcurrencyIT {
         for (int i = 0; i < ACCOUNTS; i++) {
             long ownerId = TestUsers.newCustomer(mockMvc).id();
             AccountResponse account = accountService.open(ownerId, Currency.UZS);
-            ledgerService.deposit(new CashOperationRequest(account.number(), INITIAL_BALANCE, null), adminId);
+            ledgerService.deposit(new CashOperationRequest(account.number(), INITIAL_BALANCE, null), adminId,
+                    newKey());
             accounts.add(new TestAccount(account.id(), account.number(), ownerId));
         }
         return accounts;
+    }
+
+    /** Every transfer is a new request, so each gets its own key. */
+    private static IdempotencyKey newKey() {
+        return new IdempotencyKey(UUID.randomUUID().toString());
     }
 
     /** Random ordered pairs: money flows both ways between the same two accounts, so their locks are contested. */

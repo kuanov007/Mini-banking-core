@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.util.UUID;
+
 import com.jayway.jsonpath.JsonPath;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,6 +17,9 @@ import uz.kuanov.minibank.support.TestUsers.LoggedInUser;
 
 /** Opens, funds and freezes accounts through the real API, for integration tests of other features. */
 public final class TestBank {
+
+    /** Money-moving POSTs need it; a fresh key per call makes every call a new request. */
+    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
 
     private TestBank() {
     }
@@ -39,6 +44,7 @@ public final class TestBank {
             throws Exception {
         MockHttpServletResponse response = mockMvc.perform(post("/api/admin/deposits")
                         .header(HttpHeaders.AUTHORIZATION, admin.bearer())
+                        .header(IDEMPOTENCY_KEY, UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountNumber": "%s", "amount": %s}

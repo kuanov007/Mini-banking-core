@@ -252,6 +252,7 @@ class TransferApiIT {
         String descriptionJson = description == null ? "null" : "\"" + description + "\"";
         return mockMvc.perform(post("/api/transfers")
                 .header(HttpHeaders.AUTHORIZATION, user.bearer())
+                .header(TestBank.IDEMPOTENCY_KEY, UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"fromAccount": "%s", "toAccount": "%s", "amount": %s, "description": %s}

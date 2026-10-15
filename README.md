@@ -71,9 +71,12 @@ curl -X POST http://localhost:8080/api/auth/login \
 # With the accessToken from login, from one of your accounts to any customer account
 curl -i -X POST http://localhost:8080/api/transfers \
   -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: 6f1e2d3c-4b5a-4978-8a6b-5c4d3e2f1a0b" \
   -H "Content-Type: application/json" \
   -d '{"fromAccount": "00000000000000000003", "toAccount": "00000000000000000004", "amount": 250.00, "description": "rent"}'
 ```
+
+Every money-moving POST (`/api/transfers`, `/api/admin/deposits`, `/api/admin/withdrawals`) needs an `Idempotency-Key` header: a fresh UUID per logical request, reused only to retry that same request. A retry gets the original `201`, body and `Location` plus `Idempotent-Replayed: true`, and moves no money; the same key with a different request is `422 IDEMPOTENCY_KEY_REUSED`.
 
 Every error comes back in the same [Problem Details](https://www.rfc-editor.org/rfc/rfc9457) shape. A validation error:
 

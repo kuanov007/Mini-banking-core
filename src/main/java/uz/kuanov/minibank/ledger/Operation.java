@@ -18,6 +18,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import uz.kuanov.minibank.account.Account;
 import uz.kuanov.minibank.account.Currency;
@@ -58,6 +60,15 @@ public class Operation {
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "timestamptz")
     private Instant createdAt;
 
+    /** Unique per initiator; {@code null} only on operations created before idempotency keys existed. */
+    @Column(name = "idempotency_key", length = 64, updatable = false)
+    private String idempotencyKey;
+
+    /** SHA-256 of the normalized request, see {@link RequestHash}; {@code null} exactly when the key is. */
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "request_hash", length = 64, updatable = false)
+    private String requestHash;
+
     @OneToMany(mappedBy = "operation", cascade = CascadeType.PERSIST)
     private List<LedgerEntry> entries = new ArrayList<>();
 
@@ -65,12 +76,15 @@ public class Operation {
         // required by JPA
     }
 
-    private Operation(OperationType type, BigDecimal amount, Currency currency, String description, long initiatedBy) {
+    private Operation(OperationType type, BigDecimal amount, Currency currency, String description,
+                      IdempotentRequest request) {
         this.type = type;
         this.amount = amount;
         this.currency = currency;
         this.description = description;
-        this.initiatedBy = initiatedBy;
+        this.initiatedBy = request.initiatorId();
+        this.idempotencyKey = request.key().value();
+        this.requestHash = request.requestHash();
         // PostgreSQL stores microseconds: truncate so the value is identical after a database round trip
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
@@ -80,7 +94,7 @@ public class Operation {
      * balances after the move. Both accounts must already be locked by the caller's transaction.
      */
     static Operation post(OperationType type, Account debitAccount, Account creditAccount, BigDecimal amount,
-                          String description, long initiatedBy) {
+                          String description, IdempotentRequest request) {
         // Within one persistence context, the same row is the same instance
         if (debitAccount == creditAccount) {
             throw new BusinessException(SAME_ACCOUNT, "Source and destination accounts must differ");
@@ -93,7 +107,7 @@ public class Operation {
         debitAccount.debit(money);
         creditAccount.credit(money);
 
-        Operation operation = new Operation(type, money, debitAccount.getCurrency(), description, initiatedBy);
+        Operation operation = new Operation(type, money, debitAccount.getCurrency(), description, request);
         operation.entries.add(new LedgerEntry(operation, debitAccount, EntryDirection.DEBIT, money));
         operation.entries.add(new LedgerEntry(operation, creditAccount, EntryDirection.CREDIT, money));
         return operation;
@@ -145,6 +159,14 @@ public class Operation {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
     }
 
     public List<LedgerEntry> getEntries() {

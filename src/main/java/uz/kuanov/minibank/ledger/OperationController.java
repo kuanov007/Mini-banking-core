@@ -32,12 +32,19 @@ class OperationController {
         return ledgerService.get(id, CurrentUser.from(authentication));
     }
 
-    /** 201 with a Location pointing to {@link #get}: every money movement is created the same way. */
-    static ResponseEntity<OperationResponse> created(OperationResponse operation) {
+    /**
+     * 201 with a Location pointing to {@link #get}: every money movement is created the same way. A replay gets the
+     * same status, Location and body as the original, so a client can't tell them apart unless it reads the header.
+     */
+    static ResponseEntity<OperationResponse> created(OperationResult result) {
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/operations/{id}")
-                .buildAndExpand(operation.id())
+                .buildAndExpand(result.operation().id())
                 .toUri();
-        return ResponseEntity.created(location).body(operation);
+        ResponseEntity.BodyBuilder response = ResponseEntity.created(location);
+        if (result.replayed()) {
+            response.header(IdempotencyKey.REPLAYED_HEADER, "true");
+        }
+        return response.body(result.operation());
     }
 }

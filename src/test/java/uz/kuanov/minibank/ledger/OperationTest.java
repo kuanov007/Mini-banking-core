@@ -14,16 +14,22 @@ import uz.kuanov.minibank.common.error.BusinessException;
 
 class OperationTest {
 
+    private static final String HASH = "a".repeat(64);
+
     @Test
     void depositDebitsCashCreditsCustomerAndRecordsBalancesAfter() {
         Account cash = TestAccounts.system(1, Currency.UZS);
         Account customer = TestAccounts.customer(5, 7, Currency.UZS, "100.00");
 
-        Operation operation = Operation.post(OperationType.DEPOSIT, cash, customer, new BigDecimal("50"), "cash in", 1);
+        Operation operation = Operation.post(OperationType.DEPOSIT, cash, customer, new BigDecimal("50"), "cash in",
+                by(1));
 
         assertThat(operation.getAmount()).isEqualByComparingTo("50.00");
         assertThat(operation.getAmount().scale()).isEqualTo(2);
         assertThat(operation.getCurrency()).isEqualTo(Currency.UZS);
+        assertThat(operation.getInitiatedBy()).isEqualTo(1L);
+        assertThat(operation.getIdempotencyKey()).isEqualTo("key-1");
+        assertThat(operation.getRequestHash()).isEqualTo(HASH);
         assertThat(cash.getBalance()).isEqualByComparingTo("-50.00");
         assertThat(customer.getBalance()).isEqualByComparingTo("150.00");
 
@@ -43,7 +49,8 @@ class OperationTest {
         Account customer = TestAccounts.customer(5, 7, Currency.UZS, "10.00");
         Account cash = TestAccounts.system(1, Currency.UZS);
 
-        assertThatThrownBy(() -> Operation.post(OperationType.WITHDRAWAL, customer, cash, new BigDecimal("10.01"), null, 1))
+        assertThatThrownBy(() -> Operation.post(OperationType.WITHDRAWAL, customer, cash, new BigDecimal("10.01"),
+                null, by(1)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("INSUFFICIENT_FUNDS");
         assertThat(customer.getBalance()).isEqualByComparingTo("10.00");
@@ -54,7 +61,7 @@ class OperationTest {
     void rejectsSameAccountOnBothSides() {
         Account account = TestAccounts.customer(5, 7, Currency.UZS, "100.00");
 
-        assertThatThrownBy(() -> Operation.post(OperationType.TRANSFER, account, account, BigDecimal.ONE, null, 7))
+        assertThatThrownBy(() -> Operation.post(OperationType.TRANSFER, account, account, BigDecimal.ONE, null, by(7)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("SAME_ACCOUNT");
     }
@@ -64,7 +71,7 @@ class OperationTest {
         Account uzs = TestAccounts.customer(5, 7, Currency.UZS, "100.00");
         Account usd = TestAccounts.customer(6, 7, Currency.USD, "0");
 
-        assertThatThrownBy(() -> Operation.post(OperationType.TRANSFER, uzs, usd, BigDecimal.ONE, null, 7))
+        assertThatThrownBy(() -> Operation.post(OperationType.TRANSFER, uzs, usd, BigDecimal.ONE, null, by(7)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("CURRENCY_MISMATCH");
         assertThat(uzs.getBalance()).isEqualByComparingTo("100.00");
@@ -73,9 +80,13 @@ class OperationTest {
     @Test
     void involvesTheOwnersOfItsAccountsOnly() {
         Operation operation = Operation.post(OperationType.DEPOSIT, TestAccounts.system(1, Currency.UZS),
-                TestAccounts.customer(5, 7, Currency.UZS, "0"), BigDecimal.TEN, null, 1);
+                TestAccounts.customer(5, 7, Currency.UZS, "0"), BigDecimal.TEN, null, by(1));
 
         assertThat(operation.involves(7)).isTrue();
         assertThat(operation.involves(8)).isFalse();
+    }
+
+    private static IdempotentRequest by(long initiatorId) {
+        return new IdempotentRequest(initiatorId, new IdempotencyKey("key-" + initiatorId), HASH);
     }
 }
