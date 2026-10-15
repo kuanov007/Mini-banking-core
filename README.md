@@ -52,7 +52,8 @@ Prefer no Compose at all? Run `TestApplication` from `src/test/java` (or `./mvnw
 |---|---|---|
 | Unit | `AuthServiceTest` | business logic, repository mocked with Mockito |
 | Web slice | `AuthControllerTest`, `SecurityConfigTest` | validation, status codes, error format, 401/403 |
-| Integration | `AuthApiIT` | HTTP → service → PostgreSQL round trip, Flyway migrations |
+| Integration | `AuthApiIT`, `TransferApiIT` | HTTP → service → PostgreSQL round trip, Flyway migrations |
+| Concurrency | `TransferConcurrencyIT`, `DeadlockIT` | 1 000 parallel transfers keep the ledger balanced; opposite lock order deadlocks, `AccountLocker` doesn't |
 
 CI runs `./mvnw verify` and builds the Docker image on every push to `main` and on every pull request.
 
@@ -66,6 +67,12 @@ curl -i -X POST http://localhost:8080/api/auth/register \
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "azamat", "password": "s3cret-password"}'
+
+# With the accessToken from login, from one of your accounts to any customer account
+curl -i -X POST http://localhost:8080/api/transfers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"fromAccount": "00000000000000000003", "toAccount": "00000000000000000004", "amount": 250.00, "description": "rent"}'
 ```
 
 Every error comes back in the same [Problem Details](https://www.rfc-editor.org/rfc/rfc9457) shape. A validation error:
@@ -99,7 +106,7 @@ src/main/java/uz/kuanov/minibank
 ├── Application.java
 ├── account/                          open, list, get accounts; admin freeze and unfreeze
 ├── auth/                             register, login, JWT issuing
-├── ledger/                           operations and double-entry ledger: cash deposits, withdrawals
+├── ledger/                           operations and double-entry ledger: cash deposits, withdrawals, transfers
 ├── user/                             User entity, roles, admin bootstrap
 └── common
     ├── config/OpenApiConfig.java     API info and bearer auth for Swagger UI
@@ -117,4 +124,6 @@ src/test/java/uz/kuanov/minibank      TestcontainersConfig, TestApplication, tes
 - **One error format for everything.** RFC 9457 Problem Details with field-level validation messages and stable `code` values for business errors, so clients branch on codes instead of parsing messages.
 - **Real PostgreSQL in integration tests, not H2.** Same SQL and the same migrations as production, while unit tests stay Docker-free and fast.
 - **Package by feature.** Controllers are package-private.
+- **Pessimistic row locks, always in ascending id order.** A money movement locks both accounts with `SELECT ... FOR UPDATE` before reading their balances, so concurrent transfers can't lose an update; the fixed order means two opposite transfers queue instead of deadlocking. `DeadlockIT` keeps the proof: the same locks taken in opposite order make PostgreSQL abort one transaction.
+- **Someone else's account looks exactly like a missing one.** A transfer from an account the caller doesn't own fails with the same `ACCOUNT_NOT_FOUND` as an unknown number, so account numbers can't be probed.
 - **`Instant` + `timestamptz`, truncated to microseconds** (PostgreSQL's precision), so a timestamp doesn't change after a round trip through the database.

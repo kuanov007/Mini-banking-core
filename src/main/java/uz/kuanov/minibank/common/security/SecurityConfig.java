@@ -55,6 +55,8 @@ public class SecurityConfig {
                         // matched here: owner or ADMIN, checked in AccountService
                         .requestMatchers(HttpMethod.POST, "/api/accounts").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/accounts").hasRole("CUSTOMER")
+                        // Money leaves only a customer's own account; the bank moves cash via /api/admin/**
+                        .requestMatchers(HttpMethod.POST, "/api/transfers").hasRole("CUSTOMER")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

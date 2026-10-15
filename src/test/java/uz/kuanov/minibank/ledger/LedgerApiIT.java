@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -30,6 +29,8 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import uz.kuanov.minibank.TestcontainersConfig;
 import uz.kuanov.minibank.support.LedgerInvariants;
+import uz.kuanov.minibank.support.TestBank;
+import uz.kuanov.minibank.support.TestBank.OpenedAccount;
 import uz.kuanov.minibank.support.TestUsers;
 import uz.kuanov.minibank.support.TestUsers.LoggedInUser;
 
@@ -211,19 +212,8 @@ class LedgerApiIT {
         assertThat(balance(account.id())).isEqualByComparingTo("0");
     }
 
-    private record OpenedAccount(long id, String number) {
-    }
-
     private OpenedAccount openAccount(LoggedInUser customer, String currency) throws Exception {
-        String body = mockMvc.perform(post("/api/accounts")
-                        .header(HttpHeaders.AUTHORIZATION, customer.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"currency": "%s"}
-                                """.formatted(currency)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        return new OpenedAccount(((Number) JsonPath.read(body, "$.id")).longValue(), JsonPath.read(body, "$.number"));
+        return TestBank.openAccount(mockMvc, customer, currency);
     }
 
     private ResultActions cash(String kind, LoggedInUser user, String accountNumber, String amount,
@@ -238,12 +228,7 @@ class LedgerApiIT {
     }
 
     private ResultActions changeStatus(LoggedInUser user, long accountId, String status) throws Exception {
-        return mockMvc.perform(patch("/api/admin/accounts/{id}/status", accountId)
-                .header(HttpHeaders.AUTHORIZATION, user.bearer())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"status": "%s"}
-                        """.formatted(status)));
+        return TestBank.changeStatus(mockMvc, user, accountId, status);
     }
 
     private BigDecimal balance(long accountId) {

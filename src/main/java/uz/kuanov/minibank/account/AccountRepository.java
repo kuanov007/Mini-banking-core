@@ -27,6 +27,11 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             + " where a.number = :number")
     Optional<AccountRef> findRefByNumber(String number);
 
+    /** Like {@link #findByIdAndOwnerId}: someone else's account is indistinguishable from a missing one. */
+    @Query("select new uz.kuanov.minibank.account.AccountRef(a.id, a.type, a.currency) from Account a"
+            + " where a.number = :number and a.ownerId = :ownerId")
+    Optional<AccountRef> findRefByNumberAndOwnerId(String number, long ownerId);
+
     @Query("select a.id from Account a where a.type = :type and a.currency = :currency")
     Optional<Long> findIdByTypeAndCurrency(AccountType type, Currency currency);
 }

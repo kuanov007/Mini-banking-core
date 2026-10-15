@@ -16,6 +16,8 @@ jobs:
   build:
     name: Build & test
     runs-on: ubuntu-latest
+    # Concurrency tests have their own timeouts; this is the backstop if anything else ever hangs
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
