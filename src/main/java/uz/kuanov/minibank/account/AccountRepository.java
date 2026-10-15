@@ -22,4 +22,11 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     @Query(value = "select nextval('account_number_seq')", nativeQuery = true)
     long nextAccountNumberValue();
+
+    @Query("select new uz.kuanov.minibank.account.AccountRef(a.id, a.type, a.currency) from Account a"
+            + " where a.number = :number")
+    Optional<AccountRef> findRefByNumber(String number);
+
+    @Query("select a.id from Account a where a.type = :type and a.currency = :currency")
+    Optional<Long> findIdByTypeAndCurrency(AccountType type, Currency currency);
 }

@@ -1,0 +1,31 @@
+package uz.kuanov.minibank.ledger;
+
+import java.util.UUID;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import uz.kuanov.minibank.common.security.CurrentUser;
+
+@RestController
+@RequestMapping("/api/operations")
+@Tag(name = "Operations", description = "Completed money movements")
+class OperationController {
+
+    private final LedgerService ledgerService;
+
+    OperationController(LedgerService ledgerService) {
+        this.ledgerService = ledgerService;
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get an operation (owners of the accounts involved, or ADMIN)")
+    OperationResponse get(@PathVariable UUID id, Authentication authentication) {
+        return ledgerService.get(id, CurrentUser.from(authentication));
+    }
+}

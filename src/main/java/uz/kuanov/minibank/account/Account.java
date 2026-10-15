@@ -13,13 +13,20 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import uz.kuanov.minibank.common.error.BusinessException;
+
 /**
  * An account with behaviour, not a bag of setters: number, owner, type and currency are fixed at opening;
- * the status changes through {@link #changeStatus}, the balance (from Stage 3) only through ledger operations.
+ * the status changes through {@link #changeStatus}, the balance only through {@link #debit} and {@link #credit}.
  */
 @Entity
 @Table(name = "account")
 public class Account {
+
+    public static final String INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS";
+    public static final String ACCOUNT_NOT_ACTIVE = "ACCOUNT_NOT_ACTIVE";
+    /** A SYSTEM account used where only CUSTOMER accounts are allowed: cash operations, status changes. */
+    public static final String SYSTEM_ACCOUNT_NOT_ALLOWED = "SYSTEM_ACCOUNT_NOT_ALLOWED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -69,13 +76,53 @@ public class Account {
         return new Account(number, ownerId, AccountType.CUSTOMER, currency);
     }
 
-    /** Idempotent: setting the current status again changes nothing. */
+    /**
+     * Takes money out. Only for ledger operations, on an account locked with {@code SELECT ... FOR UPDATE}.
+     * A CUSTOMER balance never goes below zero; a SYSTEM (cash) account may.
+     */
+    public void debit(BigDecimal amount) {
+        requirePositive(amount);
+        requireActive();
+        BigDecimal newBalance = balance.subtract(amount);
+        if (type == AccountType.CUSTOMER && newBalance.signum() < 0) {
+            throw new BusinessException(INSUFFICIENT_FUNDS, "Insufficient funds on account " + number);
+        }
+        this.balance = newBalance;
+    }
+
+    /** Puts money in. Only for ledger operations, on an account locked with {@code SELECT ... FOR UPDATE}. */
+    public void credit(BigDecimal amount) {
+        requirePositive(amount);
+        requireActive();
+        this.balance = balance.add(amount);
+    }
+
+    /**
+     * Idempotent: setting the current status again changes nothing. A SYSTEM (cash) account can't be frozen:
+     * that would stop every deposit and withdrawal in its currency.
+     */
     void changeStatus(AccountStatus newStatus) {
+        if (type == AccountType.SYSTEM) {
+            throw new BusinessException(SYSTEM_ACCOUNT_NOT_ALLOWED, "The status of a SYSTEM account can't be changed");
+        }
         this.status = newStatus;
     }
 
-    boolean isOwnedBy(long userId) {
+    public boolean isOwnedBy(long userId) {
         return ownerId != null && ownerId == userId;
+    }
+
+    private void requireActive() {
+        if (status != AccountStatus.ACTIVE) {
+            throw new BusinessException(ACCOUNT_NOT_ACTIVE, "Account " + number + " is not active");
+        }
+    }
+
+    /** Amounts are validated at the API edge; a non-positive one reaching here is a bug, not a business case. */
+    private static void requirePositive(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("Amount must be positive: " + amount);
+        }
     }
 
     public Long getId() {

@@ -99,6 +99,7 @@ src/main/java/uz/kuanov/minibank
 ├── Application.java
 ├── account/                          open, list, get accounts; admin freeze and unfreeze
 ├── auth/                             register, login, JWT issuing
+├── ledger/                           operations and double-entry ledger: cash deposits, withdrawals
 ├── user/                             User entity, roles, admin bootstrap
 └── common
     ├── config/OpenApiConfig.java     API info and bearer auth for Swagger UI
