@@ -97,6 +97,7 @@ A broken business rule, `throw new BusinessException("INSUFFICIENT_FUNDS", "Insu
 ```
 src/main/java/uz/kuanov/minibank
 ├── Application.java
+├── account/                          open, list, get accounts; admin freeze and unfreeze
 ├── auth/                             register, login, JWT issuing
 ├── user/                             User entity, roles, admin bootstrap
 └── common
