@@ -68,6 +68,20 @@ class AuthControllerTest {
     }
 
     @Test
+    void registerRejectsShortPasswordWithReadableMessage() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username": "azamat", "password": "1234567", "fullName": "Azamat K"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors.password").value("must be at least 8 characters"));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
     void registerRejectsPasswordOver72Utf8BytesWith400Not500() throws Exception {
         // 40 Cyrillic letters: within 72 characters, but 80 bytes, more than BCrypt accepts
         String password = "ж".repeat(40);

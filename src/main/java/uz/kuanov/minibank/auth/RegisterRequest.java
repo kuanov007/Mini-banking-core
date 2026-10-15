@@ -15,7 +15,7 @@ public record RegisterRequest(
         @Pattern(regexp = "[A-Za-z0-9._-]{3,50}",
                 message = "must be 3-50 characters: letters, digits, '.', '_' or '-'")
         String username,
-        @NotBlank @Size(min = 8) @MaxUtf8Bytes(72) String password,
+        @NotBlank @Size(min = 8, message = "must be at least 8 characters") @MaxUtf8Bytes(72) String password,
         @NotBlank @Size(max = 100) String fullName) {
 
     /** Hides the password from logs and debuggers: a record's generated toString() prints every field. */
