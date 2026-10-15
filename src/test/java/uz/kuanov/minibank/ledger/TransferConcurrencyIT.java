@@ -15,6 +15,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
@@ -32,6 +33,7 @@ import uz.kuanov.minibank.account.AccountResponse;
 import uz.kuanov.minibank.account.AccountService;
 import uz.kuanov.minibank.account.Currency;
 import uz.kuanov.minibank.common.error.BusinessException;
+import uz.kuanov.minibank.support.DatabaseCleaner;
 import uz.kuanov.minibank.support.LedgerInvariants;
 import uz.kuanov.minibank.support.TestUsers;
 
@@ -39,7 +41,8 @@ import uz.kuanov.minibank.support.TestUsers;
  * Many transfers at once between a few accounts, in both directions, straight through the service. Without row
  * locks, concurrent read-modify-write would lose updates and create or destroy money; with locks taken in arbitrary
  * order, opposite transfers would deadlock. Neither may happen: the only acceptable failure is INSUFFICIENT_FUNDS.
- * Deliberately not @Transactional: every transfer must commit on its own, as it does in production.
+ * Deliberately not @Transactional: every transfer must commit on its own, as it does in production. The tables are
+ * cleaned before each test instead, so the counts below see only this test's operations.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -71,6 +74,11 @@ class TransferConcurrencyIT {
     }
 
     private record PlannedTransfer(TestAccount from, TestAccount to, BigDecimal amount) {
+    }
+
+    @BeforeEach
+    void cleanLedger() {
+        DatabaseCleaner.resetLedger(jdbc);
     }
 
     @Test
@@ -135,16 +143,15 @@ class TransferConcurrencyIT {
                 .param("ids", accountIds)
                 .query(BigDecimal.class).single();
         assertThat(total).isEqualByComparingTo(INITIAL_BALANCE.multiply(BigDecimal.valueOf(ACCOUNTS)));
-        long transferOperations = jdbc.sql("""
-                        select count(*) from operation o
-                        join ledger_entry debit on debit.operation_id = o.id and debit.direction = 'DEBIT'
-                        join ledger_entry credit on credit.operation_id = o.id and credit.direction = 'CREDIT'
-                        where o.type = 'TRANSFER' and debit.account_id in (:ids) and credit.account_id in (:ids)
-                        """)
-                .param("ids", accountIds)
+        long transferOperations = jdbc.sql("select count(*) from operation where type = 'TRANSFER'")
                 .query(Long.class).single();
-        assertThat(transferOperations).as("TRANSFER operations between the test accounts")
-                .isEqualTo(succeeded.get());
+        long transferEntries = jdbc.sql("""
+                        select count(*) from ledger_entry e join operation o on o.id = e.operation_id
+                        where o.type = 'TRANSFER'
+                        """)
+                .query(Long.class).single();
+        assertThat(transferOperations).as("TRANSFER operations").isEqualTo(succeeded.get());
+        assertThat(transferEntries).as("entries of TRANSFER operations").isEqualTo(2L * succeeded.get());
     }
 
     /** Each account has its own owner, since a transfer must start from one of the caller's accounts. */

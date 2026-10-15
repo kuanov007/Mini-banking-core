@@ -21,11 +21,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import uz.kuanov.minibank.TestcontainersConfig;
+import uz.kuanov.minibank.support.DatabaseCleaner;
 import uz.kuanov.minibank.support.TestUsers;
 
 /**
@@ -58,11 +60,16 @@ class DeadlockIT {
     @Autowired
     PlatformTransactionManager transactionManager;
 
+    @Autowired
+    JdbcClient jdbc;
+
     private long first;
     private long second;
 
     @BeforeEach
     void openTwoAccounts() throws Exception {
+        // Not @Transactional: each transaction here must be real. Clean up whatever earlier tests left instead
+        DatabaseCleaner.resetLedger(jdbc);
         long ownerId = TestUsers.newCustomer(mockMvc).id();
         first = accountService.open(ownerId, Currency.UZS).id();
         second = accountService.open(ownerId, Currency.UZS).id();
