@@ -106,8 +106,28 @@ class LedgerControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void acceptsTheMaximumAmountAndRejectsOneTiyinMore() throws Exception {
+        when(ledgerService.deposit(any(), anyLong())).thenReturn(DEPOSIT);
+
+        mockMvc.perform(post("/api/admin/deposits").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountNumber": "%s", "amount": 1000000000000.00}
+                                """.formatted(NUMBER)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/admin/deposits").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountNumber": "%s", "amount": 1000000000000.01}
+                                """.formatted(NUMBER)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.amount").value("must be less than or equal to 1000000000000.00"));
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"0", "-5.00", "10.001", "100000000000000000.00"})
+    @ValueSource(strings = {"0", "-5.00", "10.001", "1000000000000.01", "100000000000000000.00"})
     void rejectsInvalidAmounts(String amount) throws Exception {
         mockMvc.perform(post("/api/admin/deposits").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
