@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
@@ -104,16 +106,32 @@ class AccountApiIT {
         long accountId = openAndGetId(owner, "UZS");
         long missingId = accountId + 1_000_000;
 
-        String foreign = mockMvc.perform(get("/api/accounts/{id}", accountId)
-                        .header(HttpHeaders.AUTHORIZATION, stranger.bearer()))
-                .andReturn().getResponse().getContentAsString();
-        String missing = mockMvc.perform(get("/api/accounts/{id}", missingId)
-                        .header(HttpHeaders.AUTHORIZATION, stranger.bearer()))
-                .andReturn().getResponse().getContentAsString();
+        Map<String, Object> foreign = notFoundProblem(stranger, accountId);
+        Map<String, Object> missing = notFoundProblem(stranger, missingId);
 
-        // Same body apart from the id itself, so a 404 doesn't reveal that the account exists
-        assertThat(foreign.replace(String.valueOf(accountId), "ID"))
-                .isEqualTo(missing.replace(String.valueOf(missingId), "ID"));
+        // Only detail and instance carry the requested id; every other field must be identical,
+        // so a 404 doesn't reveal that the account exists. Compared field by field, not by replacing
+        // the id in the raw JSON: id 4 would also turn "status":404 into "status":ID0ID.
+        assertThat(foreign).containsEntry("detail", "Account with id %d not found".formatted(accountId))
+                .containsEntry("instance", "/api/accounts/" + accountId);
+        assertThat(missing).containsEntry("detail", "Account with id %d not found".formatted(missingId))
+                .containsEntry("instance", "/api/accounts/" + missingId);
+        assertThat(withoutIdFields(foreign)).isEqualTo(withoutIdFields(missing));
+    }
+
+    private Map<String, Object> notFoundProblem(LoggedInUser user, long accountId) throws Exception {
+        String body = mockMvc.perform(get("/api/accounts/{id}", accountId)
+                        .header(HttpHeaders.AUTHORIZATION, user.bearer()))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$");
+    }
+
+    private static Map<String, Object> withoutIdFields(Map<String, Object> problem) {
+        Map<String, Object> rest = new HashMap<>(problem);
+        rest.remove("detail");
+        rest.remove("instance");
+        return rest;
     }
 
     @Test
